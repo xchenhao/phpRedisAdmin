@@ -1,6 +1,7 @@
 <?php
 
 require_once 'includes/common.inc.php';
+$keys_togroup = require_once 'includes/keys_togroup.php';
 
 if($redis) {
 
@@ -33,24 +34,48 @@ if($redis) {
         continue;
       }
 
-      $key = explode($server['seperator'], $key);
-
       // $d will be a reference to the current namespace.
       $d = &$namespaces;
 
-      // We loop though all the namespaces for this key creating the array for each.
-      // Each time updating $d to be a reference to the last namespace so we can create the next one in it.
-      for ($i = 0; $i < (count($key) - 1); ++$i) {
-        if (!isset($d[$key[$i]])) {
-          $d[$key[$i]] = array();
+        $pattern = array_reduce($keys_togroup, function ($ret, $pattern) use ($key) {
+            if (fnmatch($pattern, $key)) {
+                $ret = $pattern;
+            }
+            return $ret;
+        });
+        if ($pattern) {
+            if (!isset($d[$pattern])) {
+                $d[$pattern] = [];
+            }
+            $d = &$d[$pattern];
+
+            // We loop though all the namespaces for this key creating the array for each.
+            // Each time updating $d to be a reference to the last namespace so we can create the next one in it.
+            $key_items = explode($server['seperator'], $key);
+            for ($i = 0; $i < (count($key_items) - 1); ++$i) {
+                if (!isset($d[$key_items[$i]])) {
+                    $d[$key_items[$i]] = [];
+                }
+
+                $d = &$d[$key_items[$i]];
+            }
+            $d[$key_items[count($key_items) - 1]] = [
+                '__phpredisadmin__' => true,
+                '__top_name__' => $pattern,
+            ];
+        } else {
+            $key_items = explode($server['seperator'], $key);
+            for ($i = 0; $i < (count($key_items) - 1); ++$i) {
+                if (!isset($d[$key_items[$i]])) {
+                    $d[$key_items[$i]] = [];
+                }
+
+                $d = &$d[$key_items[$i]];
+            }
+            // Nodes containing an item named __phpredisadmin__ are also a key, not just a directory.
+            // This means that creating an actual key named __phpredisadmin__ will make this bug.
+            $d[$key_items[count($key_items) - 1]] = ['__phpredisadmin__' => true];
         }
-
-        $d = &$d[$key[$i]];
-      }
-
-      // Nodes containing an item named __phpredisadmin__ are also a key, not just a directory.
-      // This means that creating an actual key named __phpredisadmin__ will make this bug.
-      $d[$key[count($key) - 1]] = array('__phpredisadmin__' => true);
 
       // Unset $d so we don't accidentally overwrite it somewhere else.
       unset($d);
@@ -64,6 +89,10 @@ if($redis) {
       if (isset($item['__phpredisadmin__'])) {
         // Unset it so we won't loop over it when printing this namespace.
         unset($item['__phpredisadmin__']);
+
+        if (isset($item['__top_name__'])) {
+            unset($item['__top_name__']);
+        }
 
         $class = array();
         $len   = false;
@@ -98,8 +127,11 @@ if($redis) {
 
 
         ?>
-        <li<?php echo empty($class) ? '' : ' class="'.implode(' ', $class).'"'?>>
-        <a href="?view&amp;s=<?php echo $server['id']?>&amp;d=<?php echo $server['db']?>&amp;key=<?php echo urlencode($fullkey)?>"><?php echo format_html($name)?><?php if ($len !== false) { ?><span class="info">(<?php echo $len?>)</span><?php } ?></a>
+        <li <?= empty($class) ? '' : ' class="' . implode(' ', $class) . '"' ?>>
+            <a href="?view&amp;s=<?= $server['id']?>&amp;d=<?= $server['db']?>&amp;key=<?= urlencode($fullkey) ?>">
+                <?= format_html($name) ?>
+                <?= $len !== false ? '<span class="info">(' . $len . ')</span>' : ''?>
+            </a>
         </li>
         <?php
       }
@@ -120,7 +152,10 @@ if($redis) {
           if ($fullkey === '') {
             $childfullkey = $childname;
           } else {
-            $childfullkey = $fullkey.$server['seperator'].$childname;
+            $childfullkey = $fullkey . $server['seperator'] . $childname;
+          }
+          if (isset($childitem['__top_name__'])) {
+              $childfullkey = str_replace($childitem['__top_name__'] . ':', '', $childfullkey);
           }
 
           print_namespace($childitem, $childname, $childfullkey, (--$l == 0));

@@ -5,7 +5,7 @@ $config = array(
   'servers' => array(
     array(
       'name'   => 'local server', // Optional name.
-      'host'   => '127.0.0.1',
+      'host'   => '172.16.10.10',
       'port'   => 6379,
       'filter' => '*',
       'scheme' => 'tcp', // Optional. Connection scheme. 'tcp' - for TCP connection, 'unix' - for connection by unix domain socket

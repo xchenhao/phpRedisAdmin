@@ -4,6 +4,8 @@ include 'config.sample.inc.php';
 
 $admin_user = getenv('ADMIN_USER');
 $admin_pass = getenv('ADMIN_PASS');
+//$admin_user = 'missevan';
+//$admin_pass = 'missevan_chat_password_tom';
 
 if (!empty($admin_user)) {
   $config['login'] = array(
